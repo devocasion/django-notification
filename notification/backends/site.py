@@ -1,20 +1,18 @@
-from django.conf import settings
-from django.core.mail import send_mail
 from django.core.urlresolvers import reverse
-from django.template import Context
-from django.template.loader import render_to_string
-from django.utils.translation import ugettext
 from django.contrib.sites.models import Site
+from django.template.context import Context
+from django.utils.translation import ugettext
 
 from notification.backends.base import NOTICES_URL_NAME, BaseBackend
+from django.db.models.loading import get_model
 
 
-class EmailBackend(BaseBackend):
-    spam_sensitivity = 2
+class SiteBackend(BaseBackend):
+    spam_sensitivity = 1
 
     def can_send(self, user, notice_type, on_site):
-        can_send = super(EmailBackend, self).can_send(user, notice_type, on_site)
-        if can_send and user.email:
+        can_send = super(SiteBackend, self).can_send(user, notice_type, on_site)
+        if can_send and on_site:
             return True
         return False
 
@@ -37,16 +35,10 @@ class EmailBackend(BaseBackend):
         context.update(extra_context)
 
         messages = self.get_formatted_messages((
-            "short.txt",
-            "full.txt"
+            "notice.html",
+            "full.html"
         ), notice_type.label, context)
 
-        subject = "".join(render_to_string("notification/email_subject.txt", {
-            "message": messages["short.txt"],
-        }, context).splitlines())
-
-        body = render_to_string("notification/email_body.txt", {
-            "message": messages["full.txt"],
-        }, context)
-
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [recipient.email])
+        Notice = get_model('notification', 'Notice')
+        Notice.objects.create(recipient=recipient, message=messages['notice.html'],
+            notice_type=notice_type, on_site=1, sender=sender)

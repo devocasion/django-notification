@@ -34,17 +34,17 @@ class LanguageStoreNotAvailable(Exception):
 
 
 class NoticeType(models.Model):
-    
+
     label = models.CharField(_("label"), max_length=40)
     display = models.CharField(_("display"), max_length=50)
     description = models.CharField(_("description"), max_length=100)
-    
+
     # by default only on for media with sensitivity less than or equal to this number
     default = models.IntegerField(_("default"))
-    
+
     def __unicode__(self):
         return self.label
-    
+
     class Meta:
         verbose_name = _("notice type")
         verbose_name_plural = _("notice types")
@@ -65,12 +65,12 @@ class NoticeSetting(models.Model):
     Indicates, for a given user, whether to send notifications
     of a given type to a given medium.
     """
-    
+
     user = models.ForeignKey(User, verbose_name=_("user"))
     notice_type = models.ForeignKey(NoticeType, verbose_name=_("notice type"))
     medium = models.CharField(_("medium"), max_length=1, choices=NOTICE_MEDIA)
     send = models.BooleanField(_("send"))
-    
+
     class Meta:
         verbose_name = _("notice setting")
         verbose_name_plural = _("notice settings")
@@ -92,7 +92,7 @@ def should_send(user, notice_type, medium):
 
 
 class NoticeManager(models.Manager):
-    
+
     def notices_for(self, user, archived=False, unseen=None, on_site=None, sent=False):
         """
         returns Notice objects for the given user.
@@ -116,21 +116,21 @@ class NoticeManager(models.Manager):
         if on_site is not None:
             qs = qs.filter(on_site=on_site)
         return qs
-    
+
     def unseen_count_for(self, recipient, **kwargs):
         """
         returns the number of unseen notices for the given user but does not
         mark them seen
         """
         return self.notices_for(recipient, unseen=True, **kwargs).count()
-    
+
     def received(self, recipient, **kwargs):
         """
         returns notices the given recipient has recieved.
         """
         kwargs["sent"] = False
         return self.notices_for(recipient, **kwargs)
-    
+
     def sent(self, sender, **kwargs):
         """
         returns notices the given sender has sent
@@ -140,7 +140,7 @@ class NoticeManager(models.Manager):
 
 
 class Notice(models.Model):
-    
+
     recipient = models.ForeignKey(User, related_name="recieved_notices", verbose_name=_("recipient"))
     sender = models.ForeignKey(User, null=True, related_name="sent_notices", verbose_name=_("sender"))
     message = models.TextField(_("message"))
@@ -149,16 +149,16 @@ class Notice(models.Model):
     unseen = models.BooleanField(_("unseen"), default=True)
     archived = models.BooleanField(_("archived"), default=False)
     on_site = models.BooleanField(_("on site"))
-    
+
     objects = NoticeManager()
-    
+
     def __unicode__(self):
         return self.message
-    
+
     def archive(self):
         self.archived = True
         self.save()
-    
+
     def is_unseen(self):
         """
         returns value of self.unseen but also changes it to false.
@@ -171,12 +171,12 @@ class Notice(models.Model):
             self.unseen = False
             self.save()
         return unseen
-    
+
     class Meta:
         ordering = ["-added"]
         verbose_name = _("notice")
         verbose_name_plural = _("notices")
-    
+
     def get_absolute_url(self):
         return reverse("notification_notice", args=[str(self.pk)])
 
@@ -235,24 +235,6 @@ def get_notification_language(user):
     raise LanguageStoreNotAvailable
 
 
-def get_formatted_messages(formats, label, context):
-    """
-    Returns a dictionary with the format identifier as the key. The values are
-    are fully rendered templates with the given context.
-    """
-    format_templates = {}
-    for format in formats:
-        # conditionally turn off autoescaping for .txt extensions in format
-        if format.endswith(".txt"):
-            context.autoescape = False
-        else:
-            context.autoescape = True
-        format_templates[format] = render_to_string((
-            "notification/%s/%s" % (label, format),
-            "notification/%s" % format), context_instance=context)
-    return format_templates
-
-
 def send_now(users, label, extra_context=None, on_site=True, sender=None):
     """
     Creates a new notice.
@@ -269,44 +251,26 @@ def send_now(users, label, extra_context=None, on_site=True, sender=None):
     """
     if extra_context is None:
         extra_context = {}
-    
+
     notice_type = NoticeType.objects.get(label=label)
-    
-    protocol = getattr(settings, "DEFAULT_HTTP_PROTOCOL", "http")
-    current_site = Site.objects.get_current()
-    
-    notices_url = u"%s://%s%s" % (
-        protocol,
-        unicode(current_site),
-        reverse("notification_notices"),
-    )
-    
     current_language = get_language()
-    
-    formats = (
-        "short.txt",
-        "full.txt",
-        "notice.html",
-        "full.html",
-    ) # TODO make formats configurable
-    
+
     for user in users:
-        recipients = []
         # get user language for user from language store defined in
         # NOTIFICATION_LANGUAGE_MODULE setting
         try:
             language = get_notification_language(user)
         except LanguageStoreNotAvailable:
             language = None
-        
+
         if language is not None:
             # activate the user's language
             activate(language)
-        
+
         for backend in NOTIFICATION_BACKENDS.values():
-            if backend.can_send(user, notice_type):
+            if backend.can_send(user, notice_type, on_site):
                 backend.deliver(user, sender, notice_type, extra_context)
-    
+
     # reset environment to original language
     activate(current_language)
 
@@ -351,7 +315,7 @@ def queue(users, label, extra_context=None, on_site=True, sender=None):
 
 
 class ObservedItemManager(models.Manager):
-    
+
     def all_for(self, observed, signal):
         """
         Returns all ObservedItems for an observed object,
@@ -360,7 +324,7 @@ class ObservedItemManager(models.Manager):
         content_type = ContentType.objects.get_for_model(observed)
         observed_items = self.filter(content_type=content_type, object_id=observed.id, signal=signal)
         return observed_items
-    
+
     def get_for(self, observed, observer, signal):
         content_type = ContentType.objects.get_for_model(observed)
         observed_item = self.get(content_type=content_type, object_id=observed.id, user=observer, signal=signal)
@@ -368,27 +332,27 @@ class ObservedItemManager(models.Manager):
 
 
 class ObservedItem(models.Model):
-    
+
     user = models.ForeignKey(User, verbose_name=_("user"))
-    
+
     content_type = models.ForeignKey(ContentType)
     object_id = models.PositiveIntegerField()
     observed_object = generic.GenericForeignKey("content_type", "object_id")
-    
+
     notice_type = models.ForeignKey(NoticeType, verbose_name=_("notice type"))
-    
+
     added = models.DateTimeField(_("added"), default=datetime.datetime.now)
-    
+
     # the signal that will be listened to send the notice
     signal = models.TextField(verbose_name=_("signal"))
-    
+
     objects = ObservedItemManager()
-    
+
     class Meta:
         ordering = ["-added"]
         verbose_name = _("observed item")
         verbose_name_plural = _("observed items")
-    
+
     def send_notice(self, extra_context=None):
         if extra_context is None:
             extra_context = {}
@@ -445,3 +409,4 @@ def is_observing(observed, observer, signal="post_save"):
 
 def handle_observations(sender, instance, *args, **kw):
     send_observation_notices_for(instance)
+
