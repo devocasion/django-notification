@@ -36,11 +36,11 @@ class BaseBackend(object):
         are fully rendered templates with the given context.
         """
         format_templates = {}
-        for format in formats:
+        for notice_format in formats:
             # conditionally turn off autoescaping for .txt extensions in format
-            if format.endswith(".txt"):
+            if notice_format.endswith(".txt"):
                 context.autoescape = False
-            format_templates[format] = render_to_string((
-                "notification/%s/%s" % (label, format),
-                "notification/%s" % format), context_instance=context)
+            format_templates[notice_format] = render_to_string((
+                "notification/%s/%s" % (label, notice_format),
+                "notification/%s" % notice_format), context_instance=context)
         return format_templates

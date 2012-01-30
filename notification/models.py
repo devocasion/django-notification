@@ -9,21 +9,16 @@ from django.db import models
 from django.db.models.query import QuerySet
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.core.mail import send_mail
 from django.core.urlresolvers import reverse
-from django.template import Context
-from django.template.loader import render_to_string
 from django.utils.translation import ugettext_lazy as _
-from django.utils.translation import ugettext, get_language, activate
+from django.utils.translation import get_language, activate
 
-from django.contrib.sites.models import Site
 from django.contrib.auth.models import User
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
 
 from notification import backends
-from notification.message import encode_message
 
 
 QUEUE_ALL = getattr(settings, "NOTIFICATION_QUEUE_ALL", False)
@@ -330,6 +325,11 @@ class ObservedItemManager(models.Manager):
         observed_item = self.get(content_type=content_type, object_id=observed.id, user=observer, signal=signal)
         return observed_item
 
+    def exists_for(self, observed, observer, signal):
+        content_type = ContentType.objects.get_for_model(observed)
+        observed_qset = self.filter(content_type=content_type, object_id=observed.id, user=observer, signal=signal)
+        return observed_qset.exists()
+
 
 class ObservedItem(models.Model):
 
@@ -398,13 +398,7 @@ def send_observation_notices_for(observed, signal="post_save", extra_context=Non
 def is_observing(observed, observer, signal="post_save"):
     if isinstance(observer, AnonymousUser):
         return False
-    try:
-        observed_items = ObservedItem.objects.get_for(observed, observer, signal)
-        return True
-    except ObservedItem.DoesNotExist:
-        return False
-    except ObservedItem.MultipleObjectsReturned:
-        return True
+    return ObservedItem.objects.exists_for(observed, observer, signal)
 
 
 def handle_observations(sender, instance, *args, **kw):
