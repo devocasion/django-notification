@@ -1,5 +1,8 @@
 from django.template.loader import render_to_string
 from django.conf import settings
+from django.template.context import Context
+from django.contrib.sites.models import Site
+from django.core.urlresolvers import reverse
 
 
 NOTICES_URL_NAME = getattr(settings, "NOTIFICATION_NOTICES_URL_NAME", "notification_notices")
@@ -30,13 +33,26 @@ class BaseBackend(object):
         """
         raise NotImplemented()
 
-    def get_formatted_messages(self, formats, label, context):
+    def get_context(self):
+        # TODO: require this to be passed in extra_context
+        current_site = Site.objects.get_current()
+        notices_url = u"http://%s%s" % (
+            unicode(Site.objects.get_current()),
+            reverse(NOTICES_URL_NAME),
+        )
+        context = Context({
+            "notices_url": notices_url,
+            "current_site": current_site,
+        })
+        return context
+
+    def get_formatted_messages(self, label, context):
         """
         Returns a dictionary with the format identifier as the key. The values are
         are fully rendered templates with the given context.
         """
         format_templates = {}
-        for notice_format in formats:
+        for notice_format in self.templates_messages:
             # conditionally turn off autoescaping for .txt extensions in format
             if notice_format.endswith(".txt"):
                 context.autoescape = False
