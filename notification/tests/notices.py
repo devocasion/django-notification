@@ -74,16 +74,28 @@ class ObservedObjectsTest(BaseTest):
         for observer in observers:
             models.observe(self.observed, observer, self.NoticeLables.NEW_COMMENT)
 
-    def test_observe(self):
+    def prepare_multiple_observers(self):
         observers = self.users[:2]
         self.observe(observers)
         for observer in observers:
             post_save.send(sender=self.observed.__class__, instance=observer, raw=False, created=False, using='default')
+        return observers
+
+    def test_observe(self):
+        observers = self.prepare_multiple_observers()
 
         models.send_observation_notices_for(self.observed)
 
         for observer in observers:
             self.assert_unseen_notices(observer, 1, 1)
+
+    def test_observe_not_for_sender(self):
+        observers = self.prepare_multiple_observers()
+
+        models.send_observation_notices_for(self.observed, sender=observers[1])
+
+        self.assert_unseen_notices(observers[0], 1, 1)
+        self.assert_unseen_notices(observers[1], 0, 0)
 
     def test_is_observing(self):
         observer = self.users[0]
@@ -99,9 +111,3 @@ class ObservedObjectsTest(BaseTest):
         models.stop_observing(self.observed, observer)
 
         self.assertFalse(models.is_observing(self.observed, observer))
-
-
-
-
-
-
