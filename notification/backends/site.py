@@ -1,7 +1,9 @@
 from django.utils.translation import ugettext
 from django.db.models.loading import get_model
+from django.template.context import Context
 
 from notification.backends.base import BaseBackend
+from django.contrib.sites.models import Site
 
 
 class SiteBackend(BaseBackend):
@@ -17,12 +19,11 @@ class SiteBackend(BaseBackend):
         return False
 
     def deliver(self, recipient, sender, notice_type, extra_context):
-        context = self.get_context()
-        # update context with user specific translations
-        context.update({
+        context = Context({
             "recipient": recipient,
             "sender": sender,
             "notice": ugettext(notice_type.display),
+            "domain": Site.objects.get_current(),
         })
         context.update(extra_context)
 

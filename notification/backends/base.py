@@ -1,11 +1,4 @@
 from django.template.loader import render_to_string
-from django.conf import settings
-from django.template.context import Context
-from django.contrib.sites.models import Site
-from django.core.urlresolvers import reverse
-
-
-NOTICES_URL_NAME = getattr(settings, "NOTIFICATION_NOTICES_URL_NAME", "notification_notices")
 
 
 class BaseBackend(object):
@@ -32,19 +25,6 @@ class BaseBackend(object):
         Deliver a notification to the given recipient.
         """
         raise NotImplemented()
-
-    def get_context(self):
-        # TODO: require this to be passed in extra_context
-        current_site = Site.objects.get_current()
-        notices_url = u"http://%s%s" % (
-            unicode(Site.objects.get_current()),
-            reverse(NOTICES_URL_NAME),
-        )
-        context = Context({
-            "notices_url": notices_url,
-            "current_site": current_site,
-        })
-        return context
 
     def get_formatted_messages(self, label, context):
         """

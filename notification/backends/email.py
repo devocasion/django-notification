@@ -2,6 +2,8 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext
+from django.template.context import Context
+from django.contrib.sites.models import Site
 
 from notification.backends.base import BaseBackend
 
@@ -25,11 +27,11 @@ class EmailBackend(BaseBackend):
         return send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [recipient.email])
 
     def deliver(self, recipient, sender, notice_type, extra_context):
-        context = self.get_context()
-        context.update({
+        context = Context({
             "recipient": recipient,
             "sender": sender,
             "notice": ugettext(notice_type.display),
+            "domain": Site.objects.get_current(),
         })
         context.update(extra_context)
 
